@@ -55,3 +55,14 @@ func handlerRegister(s *state, cmd command) error {
 	log.Printf("created user: %+v\n", user)
 	return s.cfg.SetUser(name)
 }
+
+func handlerReset(s *state, cmd command) error {
+	if len(cmd.args) != 0 {
+		return fmt.Errorf("usage: %s", cmd.name)
+	}
+	if err := s.db.Wipe(context.Background()); err != nil {
+		return fmt.Errorf("Reset unsuccessful: %w", err)
+	}
+	fmt.Println("Database reset successfully!")
+	return nil
+}
