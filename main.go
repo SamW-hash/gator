@@ -41,6 +41,7 @@ func main() {
 	cmds.register("register", handlerRegister)
 	cmds.register("reset", handlerReset)
 	cmds.register("users", handlerGetUsers)
+	cmds.register("agg", handlerAgg)
 
 	cmd := command{Name: os.Args[1], Args: os.Args[2:]}
 	if err := cmds.run(&st, cmd); err != nil {
