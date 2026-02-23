@@ -36,12 +36,12 @@ func main() {
 
 	st := state{db: database.New(db), cfg: &cfg}
 
-	cmds := commands{cmdlist: make(map[string]func(*state, command) error)}
+	cmds := commands{handlers: make(map[string]func(*state, command) error)}
 	cmds.register("login", handlerLogin)
 	cmds.register("register", handlerRegister)
 	cmds.register("reset", handlerReset)
 
-	cmd := command{name: os.Args[1], args: os.Args[2:]}
+	cmd := command{Name: os.Args[1], Args: os.Args[2:]}
 	if err := cmds.run(&st, cmd); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
