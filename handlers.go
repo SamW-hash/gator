@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/SamW-hash/gator/internal/database"
@@ -124,7 +127,34 @@ func scrapeFeeds(s *state) error {
 	}
 
 	for _, content := range feedContent.Channel.Item {
-		fmt.Printf("- %s\n", content.Title)
+		publishedAt := sql.NullTime{}
+		t, err := time.Parse(time.RFC1123Z, content.PubDate)
+		if err != nil {
+			log.Printf("Error resolving publish time: %v", err)
+		}
+		if err == nil {
+			publishedAt.Time = t
+			publishedAt.Valid = true
+		}
+		_, err = s.db.CreatePost(context.Background(), database.CreatePostParams{
+			ID:        uuid.New(),
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+			Title:     content.Title,
+			Url:       content.Link,
+			Description: sql.NullString{
+				String: content.Description,
+				Valid:  content.Description != "",
+			},
+			PublishedAt: publishedAt,
+			FeedID:      feed.ID,
+		})
+		if err != nil {
+			if strings.Contains(err.Error(), "duplicate key") {
+				continue
+			}
+			log.Printf("Couldn't create post: %v", err)
+		}
 	}
 	return nil
 }
@@ -245,5 +275,32 @@ func handlerUnfollow(s *state, cmd command, user database.User) error {
 	}
 
 	fmt.Printf("Successfully unfollowed: %s\n", cmd.Args[0])
+	return nil
+}
+
+func handlerBrowse(s *state, cmd command, user database.User) error {
+	limit := 2
+	var err error
+	if len(cmd.Args) > 0 {
+		limit, err = strconv.Atoi(cmd.Args[0])
+		if err != nil {
+			return fmt.Errorf("invalid limit: %w", err)
+		}
+	}
+
+	posts, err := s.db.GetPostsForUser(context.Background(), database.GetPostsForUserParams{
+		UserID: user.ID,
+		Limit:  int32(limit),
+	})
+	if err != nil {
+		return fmt.Errorf("couldn't get feed posts for %s: %w", user.Name, err)
+	}
+
+	for _, post := range posts {
+		fmt.Printf("--- %s ---\n", post.Title)
+		fmt.Printf("Published: %s\n", post.PublishedAt.Time.Format("Mon Jan 2, 2006"))
+		fmt.Printf("Link: %s\n", post.Url)
+		fmt.Printf("Description: %s\n", post.Description.String)
+	}
 	return nil
 }
