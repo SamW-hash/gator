@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/SamW-hash/gator/internal/database"
@@ -88,16 +89,43 @@ func handlerGetUsers(s *state, cmd command) error {
 }
 
 func handlerAgg(s *state, cmd command) error {
-	if len(cmd.Args) != 0 {
-		return fmt.Errorf("usage: %s", cmd.Name)
+	if len(cmd.Args) != 1 {
+		return fmt.Errorf("usage: %s <time_between_reqs> (e.g., 1s, 1m, 2h)", cmd.Name)
 	}
 
-	feed, err := fetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	time_between_reqs := cmd.Args[0]
+	duration, err := time.ParseDuration(time_between_reqs)
 	if err != nil {
-		return fmt.Errorf("couldn't fetch feed: %w", err)
+		return fmt.Errorf("Invalid time format: %w", err)
 	}
 
-	fmt.Printf("%+v\n", feed)
+	fmt.Printf("=============Collecting feeds every %s=============\n", time_between_reqs)
+	ticker := time.NewTicker(duration)
+	for ; ; <-ticker.C {
+		err := scrapeFeeds(s)
+		if err != nil {
+			log.Printf("Service error: %v\n", err)
+		}
+		fmt.Println("=============Awaiting Refresh=============")
+	}
+}
+
+func scrapeFeeds(s *state) error {
+	feed, err := s.db.GetNextFeedToFetch(context.Background())
+	if err != nil {
+		return fmt.Errorf("couldn't get next feed to scrape: %w", err)
+	}
+	if err := s.db.MarkFeedFetched(context.Background(), feed.ID); err != nil {
+		return fmt.Errorf("Error marking feed as fetched: %w", err)
+	}
+	feedContent, err := fetchFeed(context.Background(), feed.Url)
+	if err != nil {
+		return fmt.Errorf("couldn't get feed content: %w", err)
+	}
+
+	for _, content := range feedContent.Channel.Item {
+		fmt.Printf("- %s\n", content.Title)
+	}
 	return nil
 }
 
